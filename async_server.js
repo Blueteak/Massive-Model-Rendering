@@ -28,36 +28,7 @@ redisClient.on('ready', function(){
 });
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-//worker();
-
-testPut();
-
-function testPut()
-{
-    http.get('http://google.com/doodle.png', function(res){
-        var headers = {
-            'Content-Length': res.headers['content-length']
-            , 'Content-Type': res.headers['content-type']
-        };
-        client.putStream(res, '/doodle.png', headers, function(err, res){
-            if(err)
-                console.log(err)
-            else
-                console.log('Success!');
-        });
-    });
-}
-function testGrab()
-{
-    client.get('/test/obj.json').on('response', function(res){
-        console.log(res.statusCode);
-        console.log(res.headers);
-        res.setEncoding('utf8');
-        res.on('data', function(chunk){
-            console.log(chunk);
-        });
-    }).end();
-}
+worker();
 
 //Continually scans Redis Q for new models
 function worker()
@@ -72,24 +43,6 @@ function worker()
             return;
         var model = JSON.parse(data[1]);
         console.log('processing: ' + model.id);
-        if(useStorage)
-        {
-            /*
-            var uploader = storage.uploadFile({
-                localFile: "test.txt",
-                s3Params: {
-                    Bucket: "testredis",
-                    Key: "test.txt"
-                }
-            });
-            uploader.on('error', function(err) {
-                console.error("unable to upload:", err.stack);
-            });
-            uploader.on('progress', function() {
-                console.log("Upload s3 Progress: " + uploader.progressAmount+"/"+uploader.progressTotal);
-            });
-            */
-        }
         setTimeout(function(){setModelInfo(model.id, 10, true, false)}, 1000);
         setTimeout(function(){setModelInfo(model.id, 30, true, false)}, 3000);
         setTimeout(function(){setModelInfo(model.id, 60, true, false)}, 5000);
