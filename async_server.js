@@ -42,11 +42,6 @@ function worker()
         if(data == null)
             return;
         var model = JSON.parse(data[1]);
-        console.log('processing: ' + model.id);
-        setTimeout(function(){setModelInfo(model.id, 10, true, false)}, 1000);
-        setTimeout(function(){setModelInfo(model.id, 30, true, false)}, 3000);
-        setTimeout(function(){setModelInfo(model.id, 60, true, false)}, 5000);
-        setTimeout(function(){setModelInfo(model.id, 100, true, true)}, 6000);
     });
 }
 
@@ -68,49 +63,6 @@ function setModelInfo(id, perc, started, done)
     });
 }
 
-//Done elsewhere in final code
-app.get('/addModelTest', function(req, res)
-{
-    console.log('Adding Test Data');
-    var model = {
-        id: 'ABC'
-    }
-    redisClient.lpush('ModelQ', JSON.stringify(model), function(err, reply) {
-        console.log(reply);
-    });
-    var modelInfo = {
-        id: 'ABC',
-        started: false,
-        done: false,
-        percent: 0
-    }
-    redisClient.set('Model'+modelInfo.id, JSON.stringify(model), function(err, reply) {
-        if(!err)
-            checkCompletion(modelInfo.id);
-        console.log('Added Test Data');
-    });
-});
-
-//Scans Redis for completion message
-function checkCompletion(id)
-{
-    redisClient.get('Model'+id, function(err, reply)
-    {
-        if(err)
-            console.log(err)
-        var model = JSON.parse(reply);
-        if(model)
-        {
-            var perc = model.percent;
-            if(model.started)
-                console.log("Model Processing: " + perc +"% complete");
-            if(!model.done)
-                checkCompletion(id);
-            else
-                console.log("Model Processing Complete!");
-        }
-    });
-}
 
 var server = app.listen(8080, function () {
     console.log('Server listening on ' + server.address().port);

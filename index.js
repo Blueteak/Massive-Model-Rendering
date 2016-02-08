@@ -9,9 +9,8 @@ var express     = require('express'),
     multipart   = require('connect-multiparty'),
     fs          = require('fs'),
     stream      = require('stream'),
-    streamBuffers = require('stream-buffers');
-
-var MultiPartUpload = require('knox-mpu');
+    streamBuffers = require('stream-buffers'),
+    MultiPartUpload = require('knox-mpu-alt');
 
 
 var app = express();
@@ -35,46 +34,53 @@ var client = knox.createClient({
     port: 32769
 });
 
+//var echoStream = new stream.Writable();
+upload = null;
+streams = {};
+buffers = {};
+chunks = {};
+
 
 //File upload from Resumable.js
 app.post('/upload', function(req, res)
 {
     var objID = req.body['resumableIdentifier'];
-
     var numberOfChunks = Math.max(Math.floor(req.body['resumableTotalSize']/(req.body['resumableChunkSize']*1.0)), 1);
     var progress = (req.body['resumableChunkNumber']/numberOfChunks);
 
     progress = Math.floor(progress*100)/100.0;
     var file = '/'+objID+'.txt';
 
-    var readBuff = new streamBuffers.ReadableStreamBuffer({
-        frequency: 10,       // in milliseconds.
-        chunkSize: 2048     // in bytes.
-    });
-
-    //Create s3 Pipeline
-    var R = client.put(file, {
-        'Content-Length': req.body['resumableTotalSize']
-        , 'Content-Type': 'text/plain'
-    });
-    readBuff.pipe(R);
-    R.on('progress', function(written, total, percent)
+    if(streams[objID] == null)
     {
-        console.log("Uploaded " + percent + "% to s3");
-    });
-    R.on('response', function(res)
-    {
-        console.log("Uploaded");
-    });
-
-    //Upload to s3
-    var echoStream = new stream.Writable();
-    echoStream._write = function (chunk, encoding, done) {
-        var b = new Buffer(chunk);
-        readBuff.put(b);
-        done();
-    };
-    resumable.write(objID, echoStream);
+        chunks[objID] = 0;
+        streams[objID] = new stream.Writable();
+        buffers[objID] = new streamBuffers.ReadableStreamBuffer({
+            frequency: 10,       // in milliseconds.
+            chunkSize: 1024*1024  // in bytes.
+        });
+        streams[objID]._write = function (chunk, encoding, done) {
+            var b = new Buffer(chunk);
+            buffers[objID].put(b);
+            done();
+        };
+        var R = client.put(file, {
+            'Content-Length': 1024*1024
+            , 'Content-Type': 'text/plain'
+        });
+        R.on('response', function(r)
+        {
+            chunks[objID]--;
+            if(chunks[objID] <= 0)
+            {
+                console.log("Upload to s3 Success");
+                SendToRedis(objID,file);
+            }
+        });
+        buffers[objID].pipe(R);
+    }
+    chunks[objID]++;
+    resumable.write(objID, streams[objID]);
 
     //Send response back to uploader
     resumable.post(req, function(status, filename, original_filename, identifier)
@@ -83,14 +89,13 @@ app.post('/upload', function(req, res)
         //On Completed upload, update redis
         if(progress >= 1)
         {
-           // SendToRedis(objID,file);
+           console.log("Upload to Server completed");
         }
         res.status(status).send( {
             // NOTE: Uncomment this funciton to enable cross-domain request.
             //'Access-Control-Allow-Origin': '*'
         });
     });
-
 });
 
 
@@ -111,12 +116,71 @@ function SendToRedis(modelid, filename)
     redisClient.set('Model:'+modelid, JSON.stringify(modelInfo), function(err, reply) {
         if(!err)
         {
-            checkCompletion(modelInfo.id);
             redisClient.lpush('ModelQ', JSON.stringify(model), function(err, reply) {
-                console.log(reply);
+                if(!err) {
+                    console.log('Redis Data Set');
+                    console.log(reply);
+                    checkCompletion('Model:'+modelid);
+                }
             });
         }
-        console.log('Added Test Data');
+
+    });
+}
+
+worker();
+
+//Continually scans Redis Q for new models
+function worker()
+{
+    setTimeout(function() {
+        worker();
+    }, 1000);
+    redisClient.brpop('ModelQ', 1, function(err, data) {
+        if(err != null)
+            console.log(err);
+        if(data == null)
+            return;
+        var model = JSON.parse(data[1]);
+        var url = model.filename;
+        var wrt = fs.WriteStream('temp.txt');
+        client.getFile(url, function(err, res){
+            // check `err`, then do `res.pipe(..)` or `res.resume()` or whatever.
+            if(!err)
+            {
+                res.pipe(wrt);
+            }
+        });
+
+    });
+}
+
+function checkCompletion(id)
+{
+    redisClient.on('message', function(channel, msg) {
+        console.log( "Client: received on "+channel+" event "+msg );
+        redisClient.get('Model'+id, function(err, reply)
+        {
+            if(err)
+                console.log(err)
+            var model = JSON.parse(reply);
+            if(model)
+            {
+                var perc = model.percent;
+                if(model.started)
+                    console.log("Model Processing: " + perc +"% complete");
+                if(!model.done)
+                    checkCompletion(id);
+                else
+                    console.log("Model Processing Complete!");
+            }
+        });
+    });
+    redisClient.subscribe( "__keyspace@0__:"+id, function (err) {
+        if(!err)
+        {
+            console.log("Successfully subscribed");
+        }
     });
 }
 
