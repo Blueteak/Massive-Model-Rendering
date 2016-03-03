@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=utf-8>
+    <title>My first Three.js app</title>
+    <style>
+        body { margin: 0; }
+        canvas { width: 100%; height: 100% }
+    </style>
+</head>
+<body>
+<!-- <script src="jsFiles/socket.io.js"></script> -->
+<script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+<script src='jsFiles/threex.renderstats.js'></script>
+<script src="jsFiles/three.min.js"></script>
+<script src="jsFiles/OrbitControls.js"></script>
+<script src="jsFiles/FirstPersonControls.js"></script>
+<script src="jsFiles/OBJLoader.js"></script>
+<script src="jsFiles/modelScene.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
+<script> //Frame Counter
+    javascript:(function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();stats.domElement.style.cssText='position:fixed;left:0;top:0;z-index:10000';document.body.appendChild(stats.domElement);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='//rawgit.com/mrdoob/stats.js/master/build/stats.min.js';document.head.appendChild(script);})()
+</script>
+</body>
+</html>

@@ -180,6 +180,7 @@ module.exports = resumable = function(temporaryFolder){
     }
 
 
+
     $.clean = function(identifier, options) {
         options = options || {};
 
