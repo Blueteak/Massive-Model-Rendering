@@ -8,17 +8,6 @@ var knox        = require('knox'),
     stream      = require('stream'),
     parseObj    = require('objparse');
 
-//Setup Knox Connection
-    /*
-var client = knox.createClient({
-    key: 'b8214946fbe245b7812e53cc9f748558',
-    secret: 'a3de027dca414c0cba077035f7e4afc4',
-    bucket: 'ModelUploads',
-    endpoint: 'https://cloud.isis.vanderbilt.edu:8773/services/Cloud',
-    style: 'openstack'
-    //port: 5000
-});
-*/
 
 var client = knox.createClient({
     key: config.s3.key,
