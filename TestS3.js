@@ -21,9 +21,9 @@ var client = knox.createClient({
 */
 
 var client = knox.createClient({
-    key: 'AKIAIAVV5WMMTCERB3BQ',
-    secret: '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',
-    bucket: 'bigmodelsbucket'
+    key: config.s3.key,
+    secret: config.s3.secret,
+    bucket: config.s3.bucket
     // endpoint: '192.168.99.100',
     // port: 32769
 });
