@@ -7,7 +7,7 @@ var knox        = require('knox'),
     split       = require('split'),
     stream      = require('stream'),
     parseObj    = require('objparse');
-
+var config      = require('config.json')('./sample.json');
 
 var client = knox.createClient({
     key: config.s3.key,
