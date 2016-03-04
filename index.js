@@ -117,7 +117,10 @@ app.post('/upload', function(req, res)
     }
     chunks[objID]++;
     resumable.write(objID, streams[objID]);
+
+    //Static currently (in s3) , will replace with uploaded object
     SendToRedis('teapotsLarge','teapotsLarge.txt');
+
     //Send response back to uploader
     resumable.post(req, function(status, filename, original_filename, identifier)
     {
@@ -135,7 +138,7 @@ app.post('/upload', function(req, res)
     });
 });
 
-
+//Alery async server that a new model is ready to be processed
 function SendToRedis(modelid, filename)
 {
     var model = {
@@ -165,6 +168,7 @@ function SendToRedis(modelid, filename)
     });
 }
 
+//Check model processing completion (async_server will emit progress)
 function checkCompletion(id)
 {
     subClient.subscribe(id);
@@ -194,6 +198,7 @@ function checkCompletion(id)
     });
 }
 
+//Unused currently
 function download(filename)
 {
     if(uploaded)

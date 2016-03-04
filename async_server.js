@@ -46,11 +46,14 @@ function worker()
         var model = JSON.parse(data[1]);
         setModelInfo(model.id, 5, true, false, "");
         var file = model.filename;
+
+        //Download and write file to disk
         var writeFile = fs.createWriteStream(file);
         client.getFile('/'+file, function(err, res){
             if(!err)
                 res.pipe(writeFile);
         });
+
         writeFile.on('finish', function()
         {
             console.log('Downloaded File');
@@ -62,9 +65,11 @@ function worker()
 
 //var uploading = false;
 
+//Do pre processing
 function editFile(model, uri)
 {
     setModelInfo(model.id, 20, true, false, "");
+    //Parse file into huge JSON object
     objParse(fs.createReadStream(uri), function(err, object) {
         if(err) {
             throw new Error("Error parsing OBJ file: " + err)
@@ -77,6 +82,7 @@ function editFile(model, uri)
     });
 }
 
+//upload all parts of model to s3 serially
 function uploadParts(bounds, object, id, url)
 {
     wait.for(uploadObj, bounds, id+':bounds');
@@ -94,6 +100,7 @@ function uploadParts(bounds, object, id, url)
     fs.unlink(url);
 }
 
+//Upload model object to s3
 function uploadObj(obj, uri, callback)
 {
     var objStr = JSON.stringify(obj);
@@ -115,6 +122,7 @@ function uploadObj(obj, uri, callback)
     req.end(objStr);
 }
 
+//Emit message to redis with update on progress
 function setModelInfo(id, perc, started, done, endURL)
 {
     redisClient.get('Model'+id, function(err, reply)

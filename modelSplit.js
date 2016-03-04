@@ -1,5 +1,5 @@
 /**
- * Created by jfs on 2/27/16.
+ * Recursively splits a 3D model into parts based on vertex count and bounding box dimensions.
  */
 var objParse    = require('objparse'),
     fs          = require('fs');
@@ -9,10 +9,9 @@ var splitLimit = 25000;
 module.exports = {
     split: split,
     getBounds: getBounds
-}
+};
 
-//splitObj('dragon.obj');
-
+//Main function to call, Split(filename);
 function splitObj(uri)
 {
     objParse(fs.createReadStream(uri), function(err, object) {
@@ -52,6 +51,7 @@ function splitObj(uri)
     });
 }
 
+//Recursive split function
 function split(object)
 {
     var didSplit = false;
@@ -74,6 +74,7 @@ function split(object)
         return object;
 }
 
+//Physical split of object into two parts
 function doSplit(obj)
 {
     var bound = getBounds([obj])[0];
@@ -241,6 +242,7 @@ function doSplit(obj)
     return [obj1, obj2];
 }
 
+//Gets Midpoints of triangle vertices
 function midPoint(p1, p2, p3)
 {
     var mpt1 = [(p1[0]+p3[0])/2,(p1[1]+p3[1])/2,(p1[2]+p3[2])/2];
@@ -248,6 +250,7 @@ function midPoint(p1, p2, p3)
     return [mpt1, mpt2];
 }
 
+//Gets bounding box of object
 function getBounds(object)
 {
     var bounds = [];
@@ -274,7 +277,7 @@ function getBounds(object)
     return bounds;
 }
 
-
+//Gets the dimension (x,y,z) -> (0,1,2) on which to split the object
 function getDimension(bound)
 {
     if(bound.max[0]-bound.min[0] > bound.max[1] - bound.min[1])
