@@ -6,7 +6,8 @@ var express     = require('express'),
    // fs          = require('fs'),
     knox        = require('knox'),
     _           = require('underscore'),
-    sio         = require('socket.io');
+    sio         = require('socket.io'),
+    redis       = require('redis');
 var app = express();
 var http        = require('http').Server(app);
 var io          = require('socket.io')(http);
@@ -15,7 +16,16 @@ var config      = require('config.json')('./sample.json');
 app.use(express.static('public'));
 //app.use(bodyParser.urlencoded({ extended: true }));
 
-var SceneObj = "dragon";
+//Connect Redis
+var redisClient = redis.createClient(config.redis.port,config.redis.host);
+
+redisClient.on('ready', function(){
+    console.log('Redis Connected');
+    //redisClient.flushall();
+    redisClient.set('TargValue', 200);
+});
+
+var SceneObj = "teapotsLarge";
 var bounds;
 var haveBounds = false;
 
@@ -30,11 +40,11 @@ getBounds(SceneObj);
 function getBounds(name)
 {
     var client = knox.createClient({
-        key: config.s3.key,
-        secret: config.s3.secret,
-        bucket: config.s3.bucket
-        // endpoint: '192.168.99.100',
-        // port: 32769
+        key: config.s3.Docker.key,
+        secret: config.s3.Docker.secret,
+        bucket: config.s3.Docker.bucket,
+        endpoint: config.s3.Docker.endpoint,
+        port: config.s3.Docker.port
     });
     var buffer = '';
     client.get(name+':bounds').on('response', function(res){
@@ -47,13 +57,28 @@ function getBounds(name)
             bounds = JSON.parse(buffer);
             buffer = null;
             haveBounds = true;
+            var i=0;
+            while(bounds[''+i] != undefined) {
+                i++;
+            }
+            objLength = i;
         });
     }).end();
 }
 
+var objLength = 0;
+
 var getting = false;
 
 var id = "";
+
+var needed = [];
+var clientObjects = {};
+var maxObj = 100;
+var curObj = 0;
+
+var dlIng = false;
+var camera = {};
 
 io.on('connection', function(socket){
     console.log('a user connected');
@@ -64,18 +89,33 @@ io.on('connection', function(socket){
     socket.on('updateCamera', function(msg)
     {
         var toCheck = [];
-        if(haveBounds)
+        camera = msg;
+        if(!dlIng)
         {
-            var i = 0;
-            while(bounds[''+i] != undefined)
+            dlIng = true;
+            setTimeout(function()
             {
-                if(containsPoint(msg, bounds[''+i].min || bounds[''+i].max))
+                if(haveBounds)
                 {
-                    toCheck.push(SceneObj+':obj'+i);
+                    var i = 0;
+                    while(bounds[''+i] != undefined)
+                    {
+                        if(containsPoint(msg, bounds[''+i].min || bounds[''+i].max))
+                        {
+                            //toCheck.push(SceneObj+':obj'+i);
+                            needed.push(SceneObj+':obj'+i);
+                            if(clientObjects[SceneObj+':obj'+i] != undefined)
+                            {
+                                clientObjects[SceneObj+':obj'+i]  = new Date().getTime();
+                            }
+                        }
+                        i++;
+                    }
+                    //socket.emit('checkModels', toCheck);
+                    sendModels(socket);
                 }
-                i++;
-            }
-            socket.emit('checkModels', toCheck);
+                dlIng = false;
+            }, 250);
         }
     });
     socket.on('needModels', function(msg)
@@ -86,6 +126,53 @@ io.on('connection', function(socket){
         }
     });
 });
+
+
+
+function sendModels(socket)
+{
+    if(needed.length > 0)
+    {
+        for(var i=0; i<needed.length; i++)
+        {
+            var newObj = needed[i];
+            if(clientObjects[newObj] == undefined)
+            {
+                console.log("need: " + newObj);
+                curObj++;
+                var delObj = "";
+                if(curObj > maxObj)
+                {
+                    delObj = getLRU();
+                    curObj--;
+                    console.log("Removing: " + delObj + " for space.");
+                    clientObjects[delObj] = undefined;
+                }
+                clientObjects[newObj] = new Date().getTime();
+                setTimeout(dbModel(newObj, socket, delObj), 0);
+            }
+            else
+            {
+                clientObjects[newObj] = new Date().getTime();
+            }
+        }
+    }
+}
+
+function getLRU()
+{
+    var lowest = Number.MAX_VALUE;
+    var lowKey = "";
+    for(var i=0; i<objLength; i++)
+    {
+        if(clientObjects[SceneObj+':obj'+i] != undefined && clientObjects[SceneObj+':obj'+i] < lowest)
+        {
+            lowest = clientObjects[SceneObj+':obj'+i];
+            lowKey = SceneObj+':obj'+i;
+        }
+    }
+    return lowKey;
+}
 
 function containsPoint(frustum, point)
 {
@@ -104,30 +191,48 @@ function distance(plane, point)
     return p;
 }
 
-function dbModel(name, socket)
+function dbModel(name, socket, rem)
 {
-    var client = knox.createClient({
-        key: config.s3.key,
-        secret: config.s3.secret,
-        bucket: config.s3.bucket
-        // endpoint: '192.168.99.100',
-        // port: 32769
+    redisClient.get(name, function(err, data){
+       if(err || data == null)
+       {
+           var client = knox.createClient({
+               key: config.s3.Docker.key,
+               secret: config.s3.Docker.secret,
+               bucket: config.s3.Docker.bucket,
+               endpoint: config.s3.Docker.endpoint,
+               port: config.s3.Docker.port
+           });
+           var buffer = '';
+           client.get(name).on('response', function(res)
+           {
+               res.setEncoding('utf8');
+               res.on('data', function(chunk){
+                   buffer += chunk.toString();
+               });
+               res.on('end', function()
+               {
+                   console.log('Got File: ' + name);
+                   if(socket)
+                       socket.emit('getModel', JSON.stringify({modelName: name, modelObj: buffer, remove: rem}));
+                   stuff(name, buffer);
+                   buffer = '';
+                   getting = false;
+               })
+           }).end();
+       } else {
+           console.log("Had model " + name + " in redis");
+           socket.emit('getModel', JSON.stringify({modelName: name, modelObj: data, remove: rem}));
+       }
     });
-    var buffer = '';
-    //console.log('Getting File: ' + name);
-    client.get(name).on('response', function(res){
-        res.setEncoding('utf8');
-        res.on('data', function(chunk){
-            buffer += chunk.toString();
-        });
-        res.on('end', function(){
-            console.log('Got File: ' + name);
-            if(socket)
-                socket.emit('getModel', JSON.stringify({modelName: name, modelObj: buffer}));
-            buffer = '';
-            getting = false;
-        });
-    }).end();
+
+
+}
+
+function stuff(uri, obj)
+{
+    redisClient.set(uri, obj);
+    console.log("Saving " + uri + " in redis");
 }
 
 var server = http.listen(8080, function () {

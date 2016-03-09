@@ -13,11 +13,11 @@ var config      = require('config.json')('./sample.json');
 
 
 var client = knox.createClient({
-    key: config.s3.key,
-    secret: config.s3.secret,
-    bucket: config.s3.bucket
-    // endpoint: '192.168.99.100',
-    // port: 32769
+    key: config.s3.Docker.key,
+    secret: config.s3.Docker.secret,
+    bucket: config.s3.Docker.bucket,
+    endpoint: config.s3.Docker.endpoint,
+    port: config.s3.Docker.port
 });
 
 var useStorage = true; //Enable/Disable Usage of external (currently s3) storage

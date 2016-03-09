@@ -36,11 +36,11 @@ subClient.on('ready', function(){
 
 //Setup Knox Connection
 var client = knox.createClient({
-    key: config.s3.key,
-    secret: config.s3.secret,
-    bucket: config.s3.bucket
-    // endpoint: '192.168.99.100',
-    // port: 32769
+    key: config.s3.Docker.key,
+    secret: config.s3.Docker.secret,
+    bucket: config.s3.Docker.bucket,
+    endpoint: config.s3.Docker.endpoint,
+    port: config.s3.Docker.port
 });
 
 //var echoStream = new stream.Writable();

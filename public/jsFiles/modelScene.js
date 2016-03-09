@@ -184,6 +184,20 @@ var dropped = {};
 socket.on('getModel', function(msg)
 {
     msg = JSON.parse(msg);
+    if(msg.remove.length > 2)
+    {
+        delete modelCache[msg.remove];
+        var selectedObject = scene.getObjectByName(msg.remove);
+        if(selectedObject) {
+            scene.remove(selectedObject);
+            selectedObject.geometry.dispose();
+            selectedObject.material.dispose();
+            selectedObject.geometry = undefined;
+            selectedObject.material = undefined;
+            selectedObject = undefined;
+            console.log("Removed: " + msg.remove);
+        }
+    }
     if(dropped[msg.modelName] == undefined)
     {
         console.log("Got new Model: " + msg.modelName);
