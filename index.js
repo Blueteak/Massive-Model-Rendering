@@ -119,7 +119,7 @@ app.post('/upload', function(req, res)
     resumable.write(objID, streams[objID]);
 
     //Static currently (in s3) , will replace with uploaded object
-    SendToRedis('teapotsLarge','teapotsLarge.txt');
+    SendToRedis('dragon','dragon.obj');
 
     //Send response back to uploader
     resumable.post(req, function(status, filename, original_filename, identifier)

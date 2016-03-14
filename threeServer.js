@@ -105,9 +105,9 @@ io.on('connection', function(socket){
                 {
                     var occs = setupOcc(cPos);
                     var i = 0;
-                    while(bounds[''+i] != undefined && occs[i] == false)
+                    while(bounds[''+i] != undefined)
                     {
-                        if(containsPoint(msg.frust, bounds[''+i].min || bounds[''+i].max))
+                        if(occs[i] == false && containsPoint(msg.frust, bounds[''+i].min || bounds[''+i].max))
                         {
                             //toCheck.push(SceneObj+':obj'+i);
                             needed.push(SceneObj+':obj'+i);
@@ -169,33 +169,66 @@ function sendModels(socket)
 function setupOcc(camPos)
 {
     var occluded = [];
-    var org = camPos; var dir = [0,0,0];
+    var org = [camPos.x, camPos.y, camPos.z]; var dir = [0,0,0];
     var r1 = Raycast(org, dir);
     var r2 = Raycast(org, dir);
+    var r3 = Raycast(org, dir);
     for(var i=0; i<objLength; i++)
     {
         var topOcc = false;
+        var midOcc = false;
         var botOcc = false;
         r1.update(org, dirTo(bounds[''+i].min, org));
         r2.update(org, dirTo(bounds[''+i].max, org));
+        r3.update(org, dirTo(midPt(bounds[''+i].min, bounds[''+i].max), org));
         for(var j=0; j<objLength; j++)
         {
-            if(topOcc && botOcc)
-                break;
-            if(!topOcc)
+            if(j != i && (j > occluded.length || occluded[j] == false))
             {
-                if(r1.intersects([bounds[''+j].min, bounds[''+j].max])) topOcc = true;
-            }
-            if(!botOcc)
-            {
-                if(r2.intersects([bounds[''+j].min, bounds[''+j].max])) botOcc = true;
+                if(topOcc && botOcc && midOcc) {
+                    break;
+                }
+                if(!topOcc) {
+                    if(r1.intersects([bounds[''+j].min, bounds[''+j].max]))
+                    {
+                        console.log("Box " + j + " blocking box " + i + " top");
+                        topOcc = true;
+                    }
+
+                }
+                if(!midOcc) {
+                    if(r3.intersects([bounds[''+j].min, bounds[''+j].max]))
+                    {
+                        console.log("Box " + j + " blocking box " + i + " middle");
+                        midOcc = true;
+                    }
+                }
+                if(!botOcc) {
+                    if(r2.intersects([bounds[''+j].min, bounds[''+j].max]))
+                    {
+                        console.log("Box " + j + " blocking box " + i + " bottom");
+                        botOcc = true;
+                    }
+                }
             }
         }
-        if(topOcc && botOcc) occluded.push(true);
-        else occluded.push(false);
+        if(topOcc && botOcc && midOcc)
+        {
+            console.log("Box " + i + " occluded");
+            occluded.push(true);
+        }
+        else {
+            occluded.push(false);
+        }
     }
     return occluded;
 }
+
+function midPt(p1, p2)
+{
+    return [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2, (p1[2]+p2[2])/2];
+}
+
 
 function dirTo(pt, org)
 {

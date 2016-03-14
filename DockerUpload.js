@@ -13,7 +13,7 @@ var client = knox.createClient({
     port: config.s3.Docker.port
 });
 
-doUpload("/Users/jonathanschenker/Desktop/teapotsLarge.txt", "teapotsLarge.txt");
+doUpload("/Users/jonathanschenker/Desktop/dragon.obj", "dragon.obj");
 
 function doUpload(uri, name)
 {
