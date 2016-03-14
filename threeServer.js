@@ -11,6 +11,7 @@ var express     = require('express'),
 var app = express();
 var http        = require('http').Server(app);
 var io          = require('socket.io')(http);
+var Raycast     = require('ray-aabb');
 var config      = require('config.json')('./sample.json');
 
 app.use(express.static('public'));
@@ -25,7 +26,7 @@ redisClient.on('ready', function(){
     redisClient.set('TargValue', 200);
 });
 
-var SceneObj = "teapotsLarge";
+var SceneObj = "dragon";
 var bounds;
 var haveBounds = false;
 
@@ -80,6 +81,8 @@ var curObj = 0;
 var dlIng = false;
 var camera = {};
 
+var lastPos = {};
+
 io.on('connection', function(socket){
     console.log('a user connected');
     socket.emit('boundingBoxes', bounds);
@@ -89,18 +92,22 @@ io.on('connection', function(socket){
     socket.on('updateCamera', function(msg)
     {
         var toCheck = [];
-        camera = msg;
-        if(!dlIng)
+        camera = msg.frust;
+        var cPos = msg.pos;
+        if(!dlIng && lastPos != cPos)
         {
+            lastPos = cPos;
+            console.log("Got Camera update");
             dlIng = true;
             setTimeout(function()
             {
                 if(haveBounds)
                 {
+                    var occs = setupOcc(cPos);
                     var i = 0;
-                    while(bounds[''+i] != undefined)
+                    while(bounds[''+i] != undefined && occs[i] == false)
                     {
-                        if(containsPoint(msg, bounds[''+i].min || bounds[''+i].max))
+                        if(containsPoint(msg.frust, bounds[''+i].min || bounds[''+i].max))
                         {
                             //toCheck.push(SceneObj+':obj'+i);
                             needed.push(SceneObj+':obj'+i);
@@ -112,7 +119,7 @@ io.on('connection', function(socket){
                         i++;
                     }
                     //socket.emit('checkModels', toCheck);
-                    sendModels(socket);
+                    sendModels(socket, msg.position);
                 }
                 dlIng = false;
             }, 250);
@@ -159,13 +166,56 @@ function sendModels(socket)
     }
 }
 
+function setupOcc(camPos)
+{
+    var occluded = [];
+    var org = camPos; var dir = [0,0,0];
+    var r1 = Raycast(org, dir);
+    var r2 = Raycast(org, dir);
+    for(var i=0; i<objLength; i++)
+    {
+        var topOcc = false;
+        var botOcc = false;
+        r1.update(org, dirTo(bounds[''+i].min, org));
+        r2.update(org, dirTo(bounds[''+i].max, org));
+        for(var j=0; j<objLength; j++)
+        {
+            if(topOcc && botOcc)
+                break;
+            if(!topOcc)
+            {
+                if(r1.intersects([bounds[''+j].min, bounds[''+j].max])) topOcc = true;
+            }
+            if(!botOcc)
+            {
+                if(r2.intersects([bounds[''+j].min, bounds[''+j].max])) botOcc = true;
+            }
+        }
+        if(topOcc && botOcc) occluded.push(true);
+        else occluded.push(false);
+    }
+    return occluded;
+}
+
+function dirTo(pt, org)
+{
+    return norm([ pt[0]-org[0], pt[1]-org[1], pt[2]-org[2] ]);
+}
+
+function norm(pt)
+{
+    var mag = Math.sqrt((pt[0] * pt[0]) + (pt[1] * pt[1]) + (pt[2] * pt[2]));
+    return [pt[0]/mag, pt[1]/mag, pt[2]/mag];
+}
+
 function getLRU()
 {
     var lowest = Number.MAX_VALUE;
     var lowKey = "";
     for(var i=0; i<objLength; i++)
     {
-        if(clientObjects[SceneObj+':obj'+i] != undefined && clientObjects[SceneObj+':obj'+i] < lowest)
+        if(clientObjects[SceneObj+':obj'+i] != undefined && clientObjects[SceneObj+':obj'+i] < lowest &&
+            needed.indexOf(SceneObj+':obj'+i) > -1)
         {
             lowest = clientObjects[SceneObj+':obj'+i];
             lowKey = SceneObj+':obj'+i;

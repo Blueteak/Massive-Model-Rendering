@@ -44,6 +44,7 @@ function init()
     sphere.name = "SkyBox";
     scene.add(sphere);
 
+    console.log(camera);
 
     camera.position.z = 3;
     cameraControls.lookVertical = true;
@@ -90,8 +91,9 @@ function render()
         var frustum = new THREE.Frustum();
         var projScreenMatrix = new THREE.Matrix4();
         projScreenMatrix.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
-        frustum.setFromMatrix( new THREE.Matrix4().multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse ) );
-        socket.emit('updateCamera', frustum);
+        frustum.setFromMatrix( new THREE.Matrix4().multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse ));
+        var camObj = {frust: frustum, pos: camera.position};
+        socket.emit('updateCamera', camObj);
         cameraPos = JSON.stringify(camera.position);
         cameraRot = JSON.stringify(camera.rotation);
     }
