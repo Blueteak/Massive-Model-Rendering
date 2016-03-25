@@ -7,7 +7,9 @@ var express     = require('express'),
     knox        = require('knox'),
     _           = require('underscore'),
     sio         = require('socket.io'),
-    redis       = require('redis');
+    redis       = require('redis'),
+    sleep       = require('sleep'),
+    Stack       = require('stackjs');
 var app = express();
 var http        = require('http').Server(app);
 var io          = require('socket.io')(http);
@@ -26,9 +28,12 @@ redisClient.on('ready', function(){
     redisClient.set('TargValue', 200);
 });
 
-var SceneObj = "dragon";
+var SceneObj = "teapotsLarge";
 var bounds;
 var haveBounds = false;
+
+var modelStack = new Stack();
+
 
 /*
 app.get('/model/:name', function(req, res) {
@@ -134,13 +139,14 @@ io.on('connection', function(socket){
     });
 });
 
-
+var sendingModels = false;
 
 function sendModels(socket)
 {
     if(needed.length > 0)
     {
-        for(var i=0; i<needed.length; i++)
+        console.log("Getting new Model List");
+        for(var i=0; i< Math.max(needed.length, maxObj); i++)
         {
             var newObj = needed[i];
             if(clientObjects[newObj] == undefined)
@@ -163,6 +169,8 @@ function sendModels(socket)
                 clientObjects[newObj] = new Date().getTime();
             }
         }
+        needed = [];
+        console.log("Finished model list, downloading models");
     }
 }
 
@@ -191,7 +199,7 @@ function setupOcc(camPos)
                 if(!topOcc) {
                     if(r1.intersects([bounds[''+j].min, bounds[''+j].max]))
                     {
-                        console.log("Box " + j + " blocking box " + i + " top");
+                        //console.log("Box " + j + " blocking box " + i + " top");
                         topOcc = true;
                     }
 
@@ -199,14 +207,14 @@ function setupOcc(camPos)
                 if(!midOcc) {
                     if(r3.intersects([bounds[''+j].min, bounds[''+j].max]))
                     {
-                        console.log("Box " + j + " blocking box " + i + " middle");
+                        //console.log("Box " + j + " blocking box " + i + " middle");
                         midOcc = true;
                     }
                 }
                 if(!botOcc) {
                     if(r2.intersects([bounds[''+j].min, bounds[''+j].max]))
                     {
-                        console.log("Box " + j + " blocking box " + i + " bottom");
+                        //console.log("Box " + j + " blocking box " + i + " bottom");
                         botOcc = true;
                     }
                 }
@@ -214,7 +222,7 @@ function setupOcc(camPos)
         }
         if(topOcc && botOcc && midOcc)
         {
-            console.log("Box " + i + " occluded");
+            //console.log("Box " + i + " occluded");
             occluded.push(true);
         }
         else {
@@ -247,8 +255,9 @@ function getLRU()
     var lowKey = "";
     for(var i=0; i<objLength; i++)
     {
-        if(clientObjects[SceneObj+':obj'+i] != undefined && clientObjects[SceneObj+':obj'+i] < lowest &&
-            needed.indexOf(SceneObj+':obj'+i) > -1)
+        var objName = SceneObj+":obj"+i;
+        if(clientObjects[objName] != undefined && clientObjects[objName] < lowest &&
+            needed.indexOf(objName) == -1)
         {
             lowest = clientObjects[SceneObj+':obj'+i];
             lowKey = SceneObj+':obj'+i;
@@ -297,7 +306,13 @@ function dbModel(name, socket, rem)
                {
                    console.log('Got File: ' + name);
                    if(socket)
-                       socket.emit('getModel', JSON.stringify({modelName: name, modelObj: buffer, remove: rem}));
+                   {
+                       var model = JSON.stringify({modelName: name, modelObj: buffer, remove: rem});
+                       //socket.emit('getModel', model));
+                       modelStack.push(model);
+                       if(!sendingModels)
+                            sendModelData(socket);
+                   }
                    stuff(name, buffer);
                    buffer = '';
                    getting = false;
@@ -308,8 +323,24 @@ function dbModel(name, socket, rem)
            socket.emit('getModel', JSON.stringify({modelName: name, modelObj: data, remove: rem}));
        }
     });
+}
 
-
+function sendModelData(socket)
+{
+    if(modelStack.size() > 0)
+    {
+        sendingModels = true;
+        var model = modelStack.pop();
+        socket.emit('getModel', model, function(status)
+        {
+            console.log(status);
+            sendModelData(socket);
+        });
+    }
+    else
+    {
+        sendingModels = false;
+    }
 }
 
 function stuff(uri, obj)
