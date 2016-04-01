@@ -46,11 +46,11 @@ getBounds(SceneObj);
 function getBounds(name)
 {
     var client = knox.createClient({
-        key: config.s3.Docker.key,
-        secret: config.s3.Docker.secret,
-        bucket: config.s3.Docker.bucket,
-        endpoint: config.s3.Docker.endpoint,
-        port: config.s3.Docker.port
+        key: config.s3.Amazon.key,
+        secret: config.s3.Amazon.secret,
+        bucket: config.s3.Amazon.bucket,
+        endpoint: config.s3.Amazon.endpoint,
+        port: config.s3.Amazon.port
     });
     var buffer = '';
     client.get(name+':bounds').on('response', function(res){
@@ -96,39 +96,9 @@ io.on('connection', function(socket){
     });
     socket.on('updateCamera', function(msg)
     {
-        var toCheck = [];
         camera = msg.frust;
         var cPos = msg.pos;
-        if(!dlIng && lastPos != cPos)
-        {
-            lastPos = cPos;
-            console.log("Got Camera update");
-            dlIng = true;
-            setTimeout(function()
-            {
-                if(haveBounds)
-                {
-                    var occs = setupOcc(cPos);
-                    var i = 0;
-                    while(bounds[''+i] != undefined)
-                    {
-                        if(occs[i] == false && containsPoint(msg.frust, bounds[''+i].min || bounds[''+i].max))
-                        {
-                            //toCheck.push(SceneObj+':obj'+i);
-                            needed.push(SceneObj+':obj'+i);
-                            if(clientObjects[SceneObj+':obj'+i] != undefined)
-                            {
-                                clientObjects[SceneObj+':obj'+i]  = new Date().getTime();
-                            }
-                        }
-                        i++;
-                    }
-                    //socket.emit('checkModels', toCheck);
-                    sendModels(socket, msg.position);
-                }
-                dlIng = false;
-            }, 250);
-        }
+        checkCamera(cPos, msg, socket, dlIng);
     });
     socket.on('needModels', function(msg)
     {
@@ -139,18 +109,61 @@ io.on('connection', function(socket){
     });
 });
 
+function checkCamera(cPos, msg, socket, dlIng)
+{
+    if(!dlIng && lastPos != cPos)
+    {
+        lastPos = cPos;
+        dlIng = true;
+        setTimeout(checkModels(cPos, msg, socket, dlIng), 250);
+    }
+}
+
+function checkModels(cPos, msg, socket, dlIng)
+{
+    console.log("Got Camera update");
+    if(haveBounds)
+    {
+        var occs = setupOcc(cPos);
+        var i = 0;
+        var curTime = new Date().getTime();
+        while(bounds[''+i] != undefined)
+        {
+            var modelName = SceneObj+':obj'+i;
+            if(occs[i] == false && (containsPoint(msg.frust, bounds[''+i].min) || containsPoint(msg.frust,bounds[''+i].max))
+                && downloading[modelName] == undefined)
+            {
+                //toCheck.push(SceneObj+':obj'+i);
+                needed.push(modelName);
+                if(clientObjects[modelName] != undefined)
+                {
+                    clientObjects[modelName]  = curTime
+                }
+            }
+            i++;
+        }
+        //socket.emit('checkModels', toCheck);
+        sendModels(socket);
+        setTimeout(checkCamera(cPos, msg, socket, dlIng), 250);
+    }
+    dlIng = false;
+}
+
 var sendingModels = false;
 
 function sendModels(socket)
 {
+    needed = _.uniq(needed);
     if(needed.length > 0)
     {
-        console.log("Getting new Model List");
-        for(var i=0; i< Math.max(needed.length, maxObj); i++)
+        var modelsDownloading = 0;
+        console.log("Getting new Model List: " + Math.min(needed.length, maxObj));
+        for(var i=0; i< Math.min(needed.length, maxObj); i++)
         {
             var newObj = needed[i];
-            if(clientObjects[newObj] == undefined)
+            if(clientObjects[newObj] == undefined && downloading[newObj] == undefined)
             {
+                modelsDownloading++;
                 console.log("need: " + newObj);
                 curObj++;
                 var delObj = "";
@@ -162,6 +175,7 @@ function sendModels(socket)
                     clientObjects[delObj] = undefined;
                 }
                 clientObjects[newObj] = new Date().getTime();
+                downloading[newObj] = true;
                 setTimeout(dbModel(newObj, socket, delObj), 0);
             }
             else
@@ -170,7 +184,14 @@ function sendModels(socket)
             }
         }
         needed = [];
-        console.log("Finished model list, downloading models");
+        if(modelsDownloading > 0)
+            console.log("Finished model list, downloading models");
+        else
+            console.log("Client has all models needed");
+    }
+    else
+    {
+        console.log("No models needed");
     }
 }
 
@@ -232,6 +253,8 @@ function setupOcc(camPos)
     return occluded;
 }
 
+var downloading = {};
+
 function midPt(p1, p2)
 {
     return [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2, (p1[2]+p2[2])/2];
@@ -285,15 +308,16 @@ function distance(plane, point)
 
 function dbModel(name, socket, rem)
 {
+    if(name == undefined) return;
     redisClient.get(name, function(err, data){
        if(err || data == null)
        {
            var client = knox.createClient({
-               key: config.s3.Docker.key,
-               secret: config.s3.Docker.secret,
-               bucket: config.s3.Docker.bucket,
-               endpoint: config.s3.Docker.endpoint,
-               port: config.s3.Docker.port
+               key: config.s3.Amazon.key,
+               secret: config.s3.Amazon.secret,
+               bucket: config.s3.Amazon.bucket,
+               endpoint: config.s3.Amazon.endpoint,
+               port: config.s3.Amazon.port
            });
            var buffer = '';
            client.get(name).on('response', function(res)
@@ -307,8 +331,8 @@ function dbModel(name, socket, rem)
                    console.log('Got File: ' + name);
                    if(socket)
                    {
-                       var model = JSON.stringify({modelName: name, modelObj: buffer, remove: rem});
-                       //socket.emit('getModel', model));
+                       var model = {modelName: name, modelObj: buffer, remove: rem};
+                       //socket.emit('getModel', model);
                        modelStack.push(model);
                        if(!sendingModels)
                             sendModelData(socket);
@@ -320,7 +344,11 @@ function dbModel(name, socket, rem)
            }).end();
        } else {
            console.log("Had model " + name + " in redis");
-           socket.emit('getModel', JSON.stringify({modelName: name, modelObj: data, remove: rem}));
+           var model = {modelName: name, modelObj: data, remove: rem};
+           modelStack.push(model);
+           if(!sendingModels)
+               sendModelData(socket);
+           //socket.emit('getModel', JSON.stringify({modelName: name, modelObj: data, remove: rem}));
        }
     });
 }
@@ -331,11 +359,11 @@ function sendModelData(socket)
     {
         sendingModels = true;
         var model = modelStack.pop();
-        socket.emit('getModel', model, function(status)
-        {
-            console.log(status);
-            sendModelData(socket);
+        downloading[model.modelName] = undefined;
+        socket.emit('getModel', JSON.stringify(model), function(error, message){
+            console.log("Success");
         });
+        setTimeout(sendModelData(socket), 0);
     }
     else
     {
@@ -346,7 +374,6 @@ function sendModelData(socket)
 function stuff(uri, obj)
 {
     redisClient.set(uri, obj);
-    console.log("Saving " + uri + " in redis");
 }
 
 var server = http.listen(8080, function () {

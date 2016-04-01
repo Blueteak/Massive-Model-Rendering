@@ -36,11 +36,11 @@ subClient.on('ready', function(){
 
 //Setup Knox Connection
 var client = knox.createClient({
-    key: config.s3.Docker.key,
-    secret: config.s3.Docker.secret,
-    bucket: config.s3.Docker.bucket,
-    endpoint: config.s3.Docker.endpoint,
-    port: config.s3.Docker.port
+    key: config.s3.Amazon.key,
+    secret: config.s3.Amazon.secret,
+    bucket: config.s3.Amazon.bucket,
+    endpoint: config.s3.Amazon.endpoint,
+    port: config.s3.Amazon.port
 });
 
 //var echoStream = new stream.Writable();
@@ -119,7 +119,7 @@ app.post('/upload', function(req, res)
     resumable.write(objID, streams[objID]);
 
     //Static currently (in s3) , will replace with uploaded object
-    SendToRedis('dragon','dragon.obj');
+    SendToRedis('Powerplant','Powerplant.obj');
 
     //Send response back to uploader
     resumable.post(req, function(status, filename, original_filename, identifier)
