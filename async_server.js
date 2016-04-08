@@ -74,6 +74,7 @@ function editFile(model, uri)
         if(err) {
             throw new Error("Error parsing OBJ file: " + err)
         }
+        console.log("Finished Initial Parse");
         setModelInfo(model.id, 30, true, false, "");
         object = objParts.split(object);
         var bounds = objParts.getBounds(object);

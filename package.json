@@ -15,6 +15,9 @@
     "knox-mpu-alt": "^0.2.0",
     "objparse": "^0.1.3",
     "parse-obj": "0.0.0",
+    "polygon": "^1.0.2",
+    "polygon.clip": "0.0.3",
+    "quick-hull-2d": "^0.1.0",
     "ray-aabb": "^3.0.2",
     "redis": "^2.4.2",
     "resumable": "0.0.1",
@@ -23,7 +26,8 @@
     "socket.io": "^1.4.5",
     "split": "^1.0.0",
     "stackjs": "^0.1.0",
-    "stream-buffers": "^3.0.0"
+    "stream-buffers": "^3.0.0",
+    "vec2": "^1.4.2"
   },
   "devDependencies": {},
   "scripts": {
